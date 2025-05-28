@@ -1,7 +1,9 @@
 import numpy as np
 import random as rand
 from nsga import nsga1
+from spea import spea1_algorithm
 import csv
+
 class TSP:
     def __init__(self,filename):
         self.n_cities=0
@@ -93,16 +95,81 @@ def solve_with_nsga():
 
     return Ytrue_avg
 
+def solve_with_spea(tsp_instance):
+    """
+    Ejecuta el SPEA1 varias veces and agrega los frentes de pareto.
+    escribe el resultado en 'frentes_pareto_spea.csv'.
+
+    Args:
+        tsp_instance (TSP): una instancia del TSP class.
+
+    Returns:
+        list: Frente de pareto promedio.
+    """
+    avg_fronts = []
+    num_runs = 5 # You can change this number of runs
+
+    # Parameters for SPEA1 (can be adjusted)
+    pop_size = 100
+    generations = 200
+    crossover_rate = 0.8
+    mutation_rate = 0.1
+    archive_size = int(pop_size * 0.5) # A common heuristic for archive size
+
+    with open("frentes_pareto_spea.csv", mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(["Corrida", "Objetivo1", "Objetivo2"])
+
+        for problem_run in range(1, num_runs + 1):
+            print(f'Episodio SPEA1: {problem_run}')
+            # Call the core SPEA1 algorithm function
+            Ytrue_spea = spea1_algorithm(tsp_instance, pop_size, archive_size, generations, crossover_rate, mutation_rate)
+            avg_fronts.append(Ytrue_spea)
+
+            # Write individual run results
+            for obj1, obj2 in Ytrue_spea:
+                writer.writerow([f"corrida_{problem_run}", float(obj1), float(obj2)])
+
+            Ytrue_float = [(float(a), float(b)) for (a, b) in Ytrue_spea]
+            print(f'Ytrue de la corrida {problem_run} (SPEA1): {Ytrue_float}')
+
+        """Ordena todos los frentes por el primer objetivo """
+        frentes_ordenados = []
+        for frente in avg_fronts:
+            frente_ordenado = sorted(frente, key=lambda x: x[0])
+            frentes_ordenados.append(frente_ordenado)
+
+        """ promedio de punto a punto """
+        min_len = min(len(frente) for frente in frentes_ordenados)
+
+        Ytrue_avg = []
+        if min_len > 0:
+            for i in range(min_len):
+                avg_sol = np.mean([frente[i] for frente in frentes_ordenados], axis=0)
+                Ytrue_avg.append(tuple(avg_sol))
+
+            for obj1, obj2 in Ytrue_avg:
+                writer.writerow(["promedio_spea", float(obj1), float(obj2)])
+        else:
+            print("Warning: No hay soluciones no domiandas al promedio.")
+
+    return Ytrue_avg
+
         
-tsp1=TSP("tsp_KROAB100.TSP.TXT")
-tsp1.print_summary()
+if __name__ == '__main__':
+    tsp1 = TSP("tsp_KROAB100.TSP.TXT")
+    tsp1.print_summary()
 
-ytrue=solve_with_nsga()
-print(f'Ytrue resultante de las 5 corridas: {ytrue}')
-""" 
+    ytrue_spea = solve_with_spea(tsp1)
+    print(f'\nYtrue resultante de las corridas (SPEA1): {ytrue_spea}')
 
-for i in range(100):
-    tour = list(range(tsp1.n_cities))
-    rand.shuffle(tour)
-    cost = tsp1.evaluar(tour)
-    print(f'Tour {i+1} cost (ambos objetivos): ({cost[0]:.2f}, {cost[1]:.2f})') """
+    ytrue_nsga = solve_with_nsga()
+    print(f'\nYtrue resultante de las corridas (NSGA-I): {ytrue_nsga}')
+
+
+    """ 
+    for i in range(100):
+        tour = list(range(tsp1.n_cities))
+        rand.shuffle(tour)
+        cost = tsp1.evaluar(tour)
+        print(f'Tour {i+1} cost (ambos objetivos): ({cost[0]:.2f}, {cost[1]:.2f})') """
