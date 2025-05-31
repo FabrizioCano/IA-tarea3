@@ -1,9 +1,11 @@
 import numpy as np
 import random as rand
-from nsga import nsga1 # Asegúrate de que nsga.py esté en el mismo directorio
-from spea import spea1_algorithm # Asegúrate de que spea.py esté en el mismo directorio
+from TSP import TSP
+from nsga import nsga1 
+from spea import spea1_algorithm 
 import csv
 import math
+from scipy.spatial.distance import cdist
 
 # --- Funciones de Métricas ---
 def euclidean_distance(p1, p2):
@@ -31,7 +33,7 @@ def generational_distance(obtained_front, reference_front):
                 min_dist = dist
         distances.append(min_dist)
 
-    if not distances: # Esto podría pasar si obtained_front estaba vacío, pero ya lo manejamos arriba.
+    if not distances: # si no hay distancias calculadas (frente vacío)
         return 0.0
 
     # Fórmula original de GD: sqrt(sum(d^2))/N
@@ -70,6 +72,37 @@ def spacing(front):
 
     return s
 
+
+
+
+def calculate_distribution_sigma(front, sigma_ratio=0.1):
+    """
+    M2 – Métrica de distribución usando parámetro sigma.
+    Cuenta cuántos puntos están a una distancia mayor que sigma para cada punto del frente.
+    """
+    if len(front) < 2:
+        return 0.0
+
+    front_np = np.array(front)
+    
+   
+    max_point = np.max(front_np, axis=0)
+    min_point = np.min(front_np, axis=0)
+    # Calcular la diagonal del espacio de objetivos
+    # La diagonal es la distancia entre el punto más lejano y el más cercano en el espacio de objetivos
+    diagonal = np.linalg.norm(max_point - min_point)
+
+    sigma = sigma_ratio * diagonal
+
+    # Distancias entre todos los pares de puntos
+    distances = cdist(front_np, front_np)
+
+    # Para cada punto, contar los que están a una distancia mayor a sigma
+    count_far = np.sum(distances > sigma, axis=1) - 1
+
+    return np.mean(count_far)
+
+
 def calculate_spread(front, reference_front_min_obj, reference_front_max_obj):
     """
     Calcula una métrica de 'Spread' (Extensión) para evaluar el rango cubierto por el frente.
@@ -101,8 +134,8 @@ def calculate_spread(front, reference_front_min_obj, reference_front_max_obj):
             # sumamos 1.0 (o un valor fijo) para indicar que cubre algo.
             spread_value += (1.0 if extent_obj_obtained[i] > 0 else 0.0)
             
-    # Podrías normalizar este valor sumado dividiendo por el número de objetivos
-    # spread_value /= len(extent_obj_obtained) # Descomentar si quieres el promedio de proporciones
+  
+    # spread_value /= len(extent_obj_obtained)
     return spread_value
 
 def calculate_extent(front):
@@ -111,7 +144,7 @@ def calculate_extent(front):
     Retorna una lista donde cada elemento es el rango para un objetivo.
     """
     if len(front) == 0:
-        return [0.0] * 2 # Asumiendo 2 objetivos (o ajusta a tsp_instance.n_objectives si está disponible)
+        return [0.0] * 2 
 
     front_np = np.array(front)
     min_obj_values = np.min(front_np, axis=0)
@@ -126,17 +159,13 @@ def dominates(obj1, obj2):
     strictly_better = any(f1 < f2 for f1, f2 in zip(obj1, obj2))
     return better_or_equal and strictly_better
 
-def check_for_dominated_solutions(front):
-    """
-    Verifica cuántos elementos en el 'frente' dado son dominados por otros elementos
-    dentro del MISMO frente. Esto indica la 'pureza' del frente devuelto.
-    Un valor de 0 es ideal.
-    """
+""" def check_for_dominated_solutions(front):
+    
     if not front:
         return 0
 
     dominated_count = 0
-    # Convertir a lista de tuplas para asegurar inmutabilidad y comparación adecuada
+
     front_list = [tuple(obj) for obj in front]
 
     for i in range(len(front_list)):
@@ -145,56 +174,32 @@ def check_for_dominated_solutions(front):
             if i != j and dominates(front_list[j], front_list[i]):
                 is_current_dominated = True
                 dominated_count += 1
-                break # Una vez que es dominado, no necesitamos verificar con otros
-        # No sumamos 1 si la solución es dominada por ella misma (i==j), lo cual ya se evita.
-    return dominated_count
+                break # Si se encuentra una solución que domina a la actual, no es necesario seguir comparando
+       
+    return dominated_count """
 
-# --- Clase TSP (sin cambios) ---
-class TSP:
-    def __init__(self,filename):
-        self.n_cities=0
-        self.n_objectives=0
-        self.adx_matrix=[]
-        self.filename=filename
-        self._load_file()
-        
-    def _load_file(self):
-        with open(self.filename,'r') as file:
-            lines=[line.strip() for line in file.readlines() if line.strip() != '']
-        
-        self.n_cities=int(lines[0])
-        self.n_objectives=int(lines[1])
-        
-        line=2
-        
-        for i in range(self.n_objectives):
-            mat=[]
-            
-            for j in range(self.n_cities):
-                row=list(map(float,lines[line].split()))
-                mat.append(row)
-                line+=1
-            self.adx_matrix.append(np.array(mat))
-            
-    def evaluar(self,tour):
-        costos=[]
-        for mat in self.adx_matrix:
-            cost=0
-            
-            for j in range(len(tour)):
-                cost+=mat[tour[j]] [tour[(j+1)%len(tour)]]
-            costos.append(cost)
-        return tuple(costos)
+def check_for_dominated_solutions(obtained_front, reference_front):
+    """
+    Calcula el porcentaje de soluciones del frente obtenido que NO están en el frente de referencia.
+    El resultado es el 'error' como proporción (0.0 ideal, 1.0 es que ninguna coincide).
+    """
+    if not obtained_front:
+        return 1.0  # todo es error si no hay nada obtenido
 
-    def print_summary(self):
-        print(f"Número de ciudades: {self.n_cities}")
-        print(f"Número de objetivos: {self.n_objectives}")
-        for i, matrix in enumerate(self.adx_matrix):
-            print(f"Matriz de distancias para Objetivo {i+1} (forma={matrix.shape}) cargada.")
+    # Convertimos a tuplas para poder usar conjuntos y comparación exacta
+    obtained_set = set(tuple(p) for p in obtained_front)
+    reference_set = set(tuple(p) for p in reference_front)
+
+    matching = obtained_set & reference_set  # intersección: puntos correctos
+    correct = len(matching)
+    total = len(obtained_set)
+
+    error = 1.0 - (correct / total)
+    return error
 
 # --- Funciones para ejecutar algoritmos y recopilar frentes ---
 
-def solve_with_nsga(tsp_instance, num_runs=5): # Agregado num_runs como parámetro
+def solve_with_nsga(tsp_instance, num_runs=5):
     all_nsga_fronts_per_run = [] # Para almacenar el frente de cada corrida
     all_nsga_solutions_combined = [] # Para el frente de referencia global
 
@@ -225,7 +230,7 @@ def solve_with_spea(tsp_instance, num_runs=5): # Agregado num_runs como parámet
     all_spea_fronts_per_run = [] # Para almacenar el frente de cada corrida
     all_spea_solutions_combined = [] # Para el frente de referencia global
 
-    # Parameters for SPEA1 (can be adjusted)
+    # Parameters for SPEA1
     pop_size = 100
     generations = 200
     crossover_rate = 0.8
@@ -277,15 +282,37 @@ def get_reference_pareto_front(all_solutions):
         if not is_dominated:
             pareto_front.append(unique_solutions[i])
             
-    # Opcional: ordenar el frente de referencia para mejor visualización
+
     return sorted(pareto_front, key=lambda x: x[0])
 
 
-# --- Bloque principal de ejecución ---
-if __name__ == '__main__':
-    tsp1 = TSP("tsp_KROAB100.TSP.TXT")
-    tsp1.print_summary()
+instancia=0
+def find_best_front(fronts, reference_front, reference_front_min_obj, reference_front_max_obj):
+    best_index = -1
+    best_metrics = None  # Será una tupla: (M1, M2, -M3) para comparar fácilmente (todos minimización)
+    
+    for idx, run_front in enumerate(fronts):
+        m1 = generational_distance(run_front, reference_front)
+        m2 = calculate_distribution_sigma(run_front)
+        m3 = calculate_spread(run_front, reference_front_min_obj, reference_front_max_obj)
 
+        # Guardar como tupla para comparación. Negamos M3 para que sea minimización también.
+        metrics_tuple = (m1, m2, -m3)
+
+        if best_metrics is None or metrics_tuple < best_metrics:
+            best_metrics = metrics_tuple
+            best_index = idx
+
+    return best_index, fronts[best_index], best_metrics
+instancia = 1
+if __name__ == '__main__':
+    if instancia == 0:
+        tsp1 = TSP("tsp_KROAB100.TSP.TXT")
+        tsp1.print_summary()
+    else:
+        tsp1 = TSP("tsp_kroac100.tsp.txt")
+        tsp1.print_summary()
+    # --- Parámetros de la corrida ---
     num_runs_for_metrics = 5 # Define el número de corridas para calcular el promedio y las métricas
 
     # --- Ejecutar algoritmos y recopilar todos los frentes ---
@@ -293,7 +320,7 @@ if __name__ == '__main__':
     # `all_nsga_solutions_combined` contiene todos los puntos de todas las corridas de NSGA
     nsga_fronts_per_run, all_nsga_solutions_combined = solve_with_nsga(tsp1, num_runs=num_runs_for_metrics)
     
-    # Lo mismo para SPEA1
+    
     spea_fronts_per_run, all_spea_solutions_combined = solve_with_spea(tsp1, num_runs=num_runs_for_metrics)
 
     # --- Combinar TODOS los puntos de TODOS los algoritmos y obtener el frente de Pareto de referencia global ---
@@ -322,17 +349,29 @@ if __name__ == '__main__':
     dominated_nsga_list = []
     extent_nsga_list = []
 
+    """  print("\n--- Mejor frente NSGA-I ---")
+    best_idx_nsga, best_front_nsga, best_metrics_nsga = find_best_front(
+        nsga_fronts_per_run,
+        reference_front,
+        reference_front_min_obj,
+        reference_front_max_obj
+    )
+    print(f"Índice del mejor frente: {best_idx_nsga}")
+    print(f"M1 (GD): {best_metrics_nsga[0]:.4f}")
+    print(f"M2 (Distribución σ): {best_metrics_nsga[1]:.4f}")
+    print(f"M3 (Spread): {-best_metrics_nsga[2]:.4f}")   """
+
     for run_front in nsga_fronts_per_run:
         # M1: Distancia al frente óptimo
         gd_nsga_list.append(generational_distance(run_front, reference_front))
         # M2: Distribución del frente (Spacing)
-        spacing_nsga_list.append(spacing(run_front))
+        spacing_nsga_list.append(calculate_distribution_sigma(run_front))
         # M3: Extensión del frente (Spread)
         spread_nsga_list.append(calculate_spread(run_front, reference_front_min_obj, reference_front_max_obj))
         # M3: Extensión del frente (Extent - rango puro)
         extent_nsga_list.append(calculate_extent(run_front))
         # Error: Elementos que no pertenecen al frente óptimo (dominados internamente)
-        dominated_nsga_list.append(check_for_dominated_solutions(run_front))
+        dominated_nsga_list.append(check_for_dominated_solutions(run_front,reference_front))
     
     print(f"M1 (Distancia al frente optimo) NSGA-I (Promedio): {np.mean(gd_nsga_list):.4f} (Desv.Est: {np.std(gd_nsga_list):.4f})")
     print(f"M2 (Distribucion - Spacing) NSGA-I (Promedio): {np.mean(spacing_nsga_list):.4f} (Desv.Est: {np.std(spacing_nsga_list):.4f})")
@@ -349,21 +388,37 @@ if __name__ == '__main__':
     spread_spea_list = []
     dominated_spea_list = []
     extent_spea_list = []
+    
+    """ 
+    print("\n--- Mejor frente SPEA1 ---")
+    best_idx_spea, best_front_spea, best_metrics_spea = find_best_front(
+        spea_fronts_per_run,
+        reference_front,
+        reference_front_min_obj,
+        reference_front_max_obj
+    )
+    print(f"Índice del mejor frente: {best_idx_spea}")
+    print(f"M1 (GD): {best_metrics_spea[0]:.4f}")
+    print(f"M2 (Distribución σ): {best_metrics_spea[1]:.4f}")
+    print(f"M3 (Spread): {-best_metrics_spea[2]:.4f}") """
+
 
     for run_front in spea_fronts_per_run:
         # M1: Distancia al frente óptimo
         gd_spea_list.append(generational_distance(run_front, reference_front))
         # M2: Distribución del frente (Spacing)
-        spacing_spea_list.append(spacing(run_front))
+        spacing_spea_list.append(calculate_distribution_sigma(run_front))
         # M3: Extensión del frente (Spread)
         spread_spea_list.append(calculate_spread(run_front, reference_front_min_obj, reference_front_max_obj))
         # M3: Extensión del frente (Extent - rango puro)
         extent_spea_list.append(calculate_extent(run_front))
         # Error: Elementos que no pertenecen al frente óptimo (dominados internamente)
-        dominated_spea_list.append(check_for_dominated_solutions(run_front))
+        dominated_spea_list.append(check_for_dominated_solutions(run_front,reference_front))
     
     print(f"M1 (Distancia al frente optimo) SPEA1 (Promedio): {np.mean(gd_spea_list):.4f} (Desv.Est: {np.std(gd_spea_list):.4f})")
     print(f"M2 (Distribucion - Spacing) SPEA1 (Promedio): {np.mean(spacing_spea_list):.4f} (Desv.Est: {np.std(spacing_spea_list):.4f})")
     print(f"M3 (Extension - Spread) SPEA1 (Promedio): {np.mean(spread_spea_list):.4f} (Desv.Est: {np.std(spread_spea_list):.4f})")
     print(f"M3 (Extension del frente - Rango) SPEA1 (Promedio por objetivo): {np.mean(extent_spea_list, axis=0)}")
     print(f"Error (Elementos dominados en frente SPEA1) (Promedio): {np.mean(dominated_spea_list):.2f}")
+    
+
