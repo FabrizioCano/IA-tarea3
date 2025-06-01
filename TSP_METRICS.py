@@ -6,39 +6,29 @@ from spea import spea1_algorithm
 import csv
 import math
 from scipy.spatial.distance import cdist
-
+from sklearn.neighbors import NearestNeighbors
 # --- Funciones de Métricas ---
 def euclidean_distance(p1, p2):
     """Calcula la distancia euclidiana entre dos puntos (soluciones en el espacio de objetivos)."""
     return math.sqrt(sum((a - b) ** 2 for a, b in zip(p1, p2)))
 
-def generational_distance(obtained_front, reference_front):
-    """
-    Calcula la Distancia Generacional (GD) o una métrica de distancia similar.
-    Mide la cercanía del frente obtenido al frente de referencia.
-    Un valor más bajo es mejor.
-    """
+def generational_distance_m1(obtained_front, reference_front):
+    # Calcula la métrica M1 (Generational Distance) para evaluar la distancia promedio de un frente obtenido al frente de referencia.
     if not obtained_front or not reference_front:
-        # Si uno de los frentes está vacío, la distancia es infinita o 0 si ambos están vacíos
         if not obtained_front and not reference_front:
             return 0.0
         return float('inf')
 
+    #obtiene las distancias mínimas de cada punto del frente obtenido al frente de referencia
     distances = []
     for p_obtained in obtained_front:
-        min_dist = float('inf')
-        for p_ref in reference_front:
-            dist = euclidean_distance(p_obtained, p_ref)
-            if dist < min_dist:
-                min_dist = dist
+        min_dist = min(
+            euclidean_distance(p_obtained, p_ref)
+            for p_ref in reference_front
+        )
         distances.append(min_dist)
 
-    if not distances: # si no hay distancias calculadas (frente vacío)
-        return 0.0
-
-    # Fórmula original de GD: sqrt(sum(d^2))/N
-    gd = math.sqrt(sum(d**2 for d in distances)) / len(distances)
-    return gd
+    return sum(distances) / len(distances)
 
 def spacing(front):
     """
@@ -75,33 +65,40 @@ def spacing(front):
 
 
 
-def calculate_distribution_sigma(front, sigma_ratio=0.1):
-    """
-    M2 – Métrica de distribución usando parámetro sigma.
-    Cuenta cuántos puntos están a una distancia mayor que sigma para cada punto del frente.
-    """
-    if len(front) < 2:
-        return 0.0
+""" Función para calcular la distribución del frente (Spacing) con un parámetro sigma """
+def distancia(reference_front, sigma=0.1):
+    ref_np = np.array(reference_front)
+    min_point = np.min(ref_np, axis=0)
+    max_point = np.max(ref_np, axis=0)
+    distancia_extremos = np.linalg.norm(max_point - min_point)
+    return sigma * distancia_extremos
 
-    front_np = np.array(front)
+
+def calcular_m2_interno(frente, sigma=0.1):
+    """
+    Calcula la métrica M2 de distribución del frente de Pareto.
     
-   
-    max_point = np.max(front_np, axis=0)
-    min_point = np.min(front_np, axis=0)
-    # Calcular la diagonal del espacio de objetivos
-    # La diagonal es la distancia entre el punto más lejano y el más cercano en el espacio de objetivos
-    diagonal = np.linalg.norm(max_point - min_point)
+    frente: lista de puntos (lista de listas o array de forma [n_puntos, n_objetivos])
+    sigma: umbral de distancia
+    
+    Retorna: valor de la métrica M2
+    """
+    F = np.array(frente)
+    n = len(F)
+    total = 0
+    
+    for i in range(n):
+        p = F[i]
+        # Distancias a todos los demás puntos del frente
+        distancias = np.linalg.norm(F - p, axis=1)
+        # Excluye la distancia a sí mismo (normalmente 0)
+        distancias[i] = 0.0  
+        # Cuenta cuántos puntos están a una distancia mayor que sigma
+        conteo = np.sum(distancias > sigma)
+        total += conteo
 
-    sigma = sigma_ratio * diagonal
-
-    # Distancias entre todos los pares de puntos
-    distances = cdist(front_np, front_np)
-
-    # Para cada punto, contar los que están a una distancia mayor a sigma
-    count_far = np.sum(distances > sigma, axis=1) - 1
-
-    return np.mean(count_far)
-
+    m2 = total / (n - 1)
+    return m2
 
 def calculate_spread(front, reference_front_min_obj, reference_front_max_obj):
     """
@@ -175,23 +172,22 @@ def dominates(obj1, obj2):
        
     return dominated_count """
 
-def check_for_dominated_solutions(obtained_front, reference_front, tolerance=1e-3):
+def error_M4(obtained_front, reference_front, tolerance=1e-3):
     """
-    Calcula el porcentaje de soluciones del frente obtenido que no están cerca (por tolerancia)
-    de las del frente de referencia.
+    Calcula el error M4 según la fórmula:
+    M4(F) = 1 - |F ∩ F*| / |F|
+    Donde F es el frente obtenido y F* es el frente optimo de referencia.
+    Donde la intersección se define por cercanía (norma Euclidiana <= tolerancia).
     """
-    if not obtained_front:
-        return 1.0
-
-    matched = 0
-    for p in obtained_front:
-        for q in reference_front:
-            if np.linalg.norm(np.array(p) - np.array(q)) <= tolerance:
-                matched += 1
-                break 
-
-    error = 1.0 - (matched / len(obtained_front))
-    return error
+    intersection_count = 0
+    for sol in obtained_front:
+        for ref_sol in reference_front:
+            if np.linalg.norm(np.array(sol) - np.array(ref_sol)) <= tolerance:
+                intersection_count += 1
+                break  # Evita contar duplicados
+    if len(obtained_front) == 0:
+        return 1.0  # Máximo error si no hay soluciones
+    return 1 - (intersection_count / len(obtained_front))
 
 
 # --- Funciones para ejecutar algoritmos y recopilar frentes ---
@@ -206,7 +202,7 @@ def solve_with_nsga(tsp_instance,name_instance, num_runs=5):
 
         for problem_run in range(1, num_runs + 1): 
             print(f'\n--- Corriendo NSGA-I, Episodio: {problem_run} ---')
-            Ytrue = nsga1(tsp_instance, 200, 200, 0.2, 0.3) 
+            Ytrue = nsga1(tsp_instance, 100, 200, 0.2, 0.3) 
             
             # Convertir a flotantes y asegurar que los puntos sean tuplas para consistencia
             Ytrue_float = [tuple(map(float, obj)) for obj in Ytrue]
@@ -241,7 +237,7 @@ def solve_with_spea(tsp_instance, name_instance,num_runs=5):
     all_spea_solutions_combined = [] # frente de referencia global
 
     # Parameters for SPEA1
-    pop_size = 200
+    pop_size = 100
     generations = 200
     crossover_rate = 0.8
     mutation_rate = 0.1
@@ -318,10 +314,10 @@ def find_best_front(fronts, reference_front, reference_front_min_obj, reference_
     best_metrics = None  # Será una tupla: (M1, M2, -M3) para comparar fácilmente (todos minimización)
     
     for idx, run_front in enumerate(fronts):
-        m1 = generational_distance(run_front, reference_front)
-        m2 = calculate_distribution_sigma(run_front)
+        m1 = generational_distance_m1(run_front, reference_front)
+        m2 = calcular_m2_interno(run_front)
         m3 = calculate_extent(run_front)
-        error= check_for_dominated_solutions(run_front, reference_front)
+        error= error_M4(run_front, reference_front)
         metrics_tuple = (m1, m2, -m3,error)
 
         if best_metrics is None or metrics_tuple < best_metrics:
@@ -329,7 +325,7 @@ def find_best_front(fronts, reference_front, reference_front_min_obj, reference_
             best_index = idx
 
     return best_index, fronts[best_index], best_metrics
-instancia = 1
+instancia = 0
 if __name__ == '__main__':
     
     if instancia == 0:
@@ -392,15 +388,15 @@ if __name__ == '__main__':
 
     for run_front in nsga_fronts_per_run:
         # M1: Distancia al frente óptimo
-        gd_nsga_list.append(generational_distance(run_front, reference_front))
+        gd_nsga_list.append(generational_distance_m1(run_front, reference_front))
         # M2: Distribución del frente (Spacing)
-        spacing_nsga_list.append(calculate_distribution_sigma(run_front))
+        spacing_nsga_list.append(calcular_m2_interno(run_front))
         # M3: Extensión del frente (Spread)
         spread_nsga_list.append(calculate_spread(run_front, reference_front_min_obj, reference_front_max_obj))
         # M3: Extensión del frente (Extent - rango puro)
         extent_nsga_list.append(calculate_extent(run_front))
         # Error: Elementos que no pertenecen al frente óptimo (dominados internamente)
-        dominated_nsga_list.append(check_for_dominated_solutions(run_front,reference_front))
+        dominated_nsga_list.append(error_M4(run_front,reference_front))
     
     print(f"M1 (Distancia al frente optimo) NSGA-I (Promedio): {np.mean(gd_nsga_list):.4f} (Desv.Est: {np.std(gd_nsga_list):.4f})")
     print(f"M2 (Distribucion - Spacing) NSGA-I (Promedio): {np.mean(spacing_nsga_list):.4f} (Desv.Est: {np.std(spacing_nsga_list):.4f})")
@@ -434,15 +430,15 @@ if __name__ == '__main__':
 
     for run_front in spea_fronts_per_run:
         # M1: Distancia al frente óptimo
-        gd_spea_list.append(generational_distance(run_front, reference_front))
+        gd_spea_list.append(generational_distance_m1(run_front, reference_front))
         # M2: Distribución del frente (Spacing)
-        spacing_spea_list.append(calculate_distribution_sigma(run_front))
+        spacing_spea_list.append(calcular_m2_interno(run_front))
         # M3: Extensión del frente (Spread)
         spread_spea_list.append(calculate_spread(run_front, reference_front_min_obj, reference_front_max_obj))
         # M3: Extensión del frente (Extent - rango puro)
         extent_spea_list.append(calculate_extent(run_front))
         # Error: Elementos que no pertenecen al frente óptimo (dominados internamente)
-        dominated_spea_list.append(check_for_dominated_solutions(run_front,reference_front))
+        dominated_spea_list.append(error_M4(run_front,reference_front))
     
     print(f"M1 (Distancia al frente optimo) SPEA1 (Promedio): {np.mean(gd_spea_list):.4f} (Desv.Est: {np.std(gd_spea_list):.4f})")
     print(f"M2 (Distribucion - Spacing) SPEA1 (Promedio): {np.mean(spacing_spea_list):.4f} (Desv.Est: {np.std(spacing_spea_list):.4f})")
