@@ -206,7 +206,7 @@ def solve_with_nsga(tsp_instance,name_instance, num_runs=5):
 
         for problem_run in range(1, num_runs + 1): 
             print(f'\n--- Corriendo NSGA-I, Episodio: {problem_run} ---')
-            Ytrue = nsga1(tsp_instance, 100, 200, 0.2, 0.3) 
+            Ytrue = nsga1(tsp_instance, 200, 200, 0.2, 0.3) 
             
             # Convertir a flotantes y asegurar que los puntos sean tuplas para consistencia
             Ytrue_float = [tuple(map(float, obj)) for obj in Ytrue]
@@ -241,7 +241,7 @@ def solve_with_spea(tsp_instance, name_instance,num_runs=5):
     all_spea_solutions_combined = [] # frente de referencia global
 
     # Parameters for SPEA1
-    pop_size = 100
+    pop_size = 200
     generations = 200
     crossover_rate = 0.8
     mutation_rate = 0.1
