@@ -1,31 +1,43 @@
 Archivo KROAB100
-
 --- Métricas PROMEDIO para NSGA-I ---
-M1 (Distancia al frente optimo) NSGA-I (Promedio): 794.1009 (Desv.Est: 688.2672)
-M2 (Distribucion - Spacing) NSGA-I (Promedio): 26.7763 (Desv.Est: 10.7301)
-M3 (Extension - Spread) NSGA-I (Promedio): 1.2703 (Desv.Est: 0.5619)
-M3 (Extension del frente - Rango) NSGA-I (Promedio por objetivo): [27193.8531644 28951.5022924]
-Error (Elementos dominados en frente NSGA-I) (Promedio): 0.71
+M1 (Distancia al frente optimo) NSGA-I (Promedio): 1167.1649 (Desv.Est: 894.7972)
+M2 (Distribucion - Spacing) NSGA-I (Promedio): 28.4784 (Desv.Est: 12.2145)
+M3 (Extension - Spread) NSGA-I (Promedio): 1.1836 (Desv.Est: 0.5372)
+M3 (Extension del frente - Rango) NSGA-I (Promedio por objetivo): 37816.662495756966
+Error (Elementos dominados en frente NSGA-I) (Promedio): 0.73, Desviación: 0.33
 
 --- Métricas PROMEDIO para SPEA1 ---
-M1 (Distancia al frente optimo) SPEA1 (Promedio): 24460.1860 (Desv.Est: 6404.1259)
-M2 (Distribucion - Spacing) SPEA1 (Promedio): 14.7132 (Desv.Est: 5.5379)
-M3 (Extension - Spread) SPEA1 (Promedio): 1.4979 (Desv.Est: 0.2269)
-M3 (Extension del frente - Rango) SPEA1 (Promedio por objetivo): [34094.9313654 30843.8488802]
-Error (Elementos dominados en frente SPEA1) (Promedio): 1.00
+M1 (Distancia al frente optimo) SPEA1 (Promedio): 1875.9063 (Desv.Est: 1256.4646)
+M2 (Distribucion - Spacing) SPEA1 (Promedio): 32.5532 (Desv.Est: 15.2991)
+M3 (Extension - Spread) SPEA1 (Promedio): 1.0665 (Desv.Est: 0.4528)
+M3 (Extension del frente - Rango) SPEA1 (Promedio por objetivo): 32886.907264170135
+Error (Elementos dominados en frente SPEA1) (Promedio): 0.85, Desviación: 0.31
+
+--- Comparación de los mejores frentes de NSGA-I y SPEA1 ---
+Índice del mejor frente NSGA-I: 1
+M1 (GD) NSGA-I: 98.0290, M2 (Distribución σ): 48.5200, M3 (Spread): 32927.6811, Error: 0.14
+Índice del mejor frente SPEA1: 2
+M1 (GD) SPEA1: 265.8356, M2 (Distribución σ): 47.2769, M3 (Spread): 15413.8624, Error: 0.23
 
 
-kroac
+archivo kroac 100
 --- Métricas PROMEDIO para NSGA-I ---
-M1 (Distancia al frente optimo) NSGA-I (Promedio): 1008.2074 (Desv.Est: 910.6657)
-M2 (Distribucion - Spacing) NSGA-I (Promedio): 25.4136 (Desv.Est: 8.8241)
-M3 (Extension - Spread) NSGA-I (Promedio): 1.5650 (Desv.Est: 0.6019)
-M3 (Extension del frente - Rango) NSGA-I (Promedio por objetivo): [17114.2631116 22339.3812434]
-Error (Elementos dominados en frente NSGA-I) (Promedio): 0.73
+M1 (Distancia al frente optimo) NSGA-I (Promedio): 1551.8241 (Desv.Est: 1192.6888)
+M2 (Distribucion - Spacing) NSGA-I (Promedio): 19.8906 (Desv.Est: 3.9802)
+M3 (Extension - Spread) NSGA-I (Promedio): 1.4749 (Desv.Est: 0.4552)
+M3 (Extension del frente - Rango) NSGA-I (Promedio por objetivo): 36796.2752473582
+Error (Elementos dominados en frente NSGA-I) (Promedio): 0.76, Desviación: 0.39
 
 --- Métricas PROMEDIO para SPEA1 ---
-M1 (Distancia al frente optimo) SPEA1 (Promedio): 27876.0266 (Desv.Est: 3300.8130)
-M2 (Distribucion - Spacing) SPEA1 (Promedio): 16.0199 (Desv.Est: 4.3810)
-M3 (Extension - Spread) SPEA1 (Promedio): 2.5539 (Desv.Est: 0.5517)
-M3 (Extension del frente - Rango) SPEA1 (Promedio por objetivo): [29945.0754322 33504.5884536]
-Error (Elementos dominados en frente SPEA1) (Promedio): 1.00
+M1 (Distancia al frente optimo) SPEA1 (Promedio): 2119.2811 (Desv.Est: 653.2090)
+M2 (Distribucion - Spacing) SPEA1 (Promedio): 40.4429 (Desv.Est: 12.2082)
+M3 (Extension - Spread) SPEA1 (Promedio): 1.2445 (Desv.Est: 0.4049)
+M3 (Extension del frente - Rango) SPEA1 (Promedio por objetivo): 28789.629760133907
+Error (Elementos dominados en frente SPEA1) (Promedio): 1.00, Desviación: 0.00
+
+--- Comparación de los mejores frentes de NSGA-I y SPEA1 ---
+Índice del mejor frente NSGA-I: 3
+M1 (GD) NSGA-I: 0.0000, M2 (Distribución σ): 19.6667, M3 (Spread): 32885.9543, Error: 0.00
+Índice del mejor frente SPEA1: 4
+M1 (GD) SPEA1: 1098.1602, M2 (Distribución σ): 51.2353, M3 (Spread): 30915.9789, Error: 1.00
+

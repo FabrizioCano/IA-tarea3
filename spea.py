@@ -1,8 +1,10 @@
 import random
 import math
 from collections import namedtuple
-
+import numpy as np
 Individual = namedtuple("Individual", ["permutation", "objectives", "strength", "raw_fitness"])
+from sklearn.cluster import KMeans
+
 
 def dominates(obj1, obj2):
     """Verifica si obj1 domina a obj2 (para minimización)."""
@@ -40,23 +42,51 @@ def calculate_raw_fitness(population, archive):
 
     return population, archive
 
-def environmental_selection_spea1(population, archive, archive_size):
-    # Selección ambiental: selecciona individuos para el nuevo archivo
-    combined = population + archive
-    next_archive = [ind for ind in combined if ind.strength == 0]
+def environmental_selection_spea1(combined, archive_size):
+    # Asigna fuerza y fitness
+    combined = calculate_strength(combined)
+    combined, _ = calculate_raw_fitness(combined, [])  # solo importa raw_fitness de combined
 
-    if len(next_archive) > archive_size:
-        # Si hay demasiados, recorta aleatoriamente
-        random.shuffle(next_archive)
-        next_archive = next_archive[:archive_size]
-    elif len(next_archive) < archive_size:
-        # Si hay pocos, rellena con individuos dominados ordenados por fitness bruto
-        dominated = sorted([ind for ind in combined if ind.strength > 0], key=lambda ind: ind.raw_fitness)
-        next_archive.extend(dominated[:archive_size - len(next_archive)])
-        random.shuffle(next_archive)
-        next_archive = next_archive[:archive_size]
+    # Candidatos al archivo: individuos no dominados (fitness == 0)
+    archive = [ind for ind in combined if ind.raw_fitness == 0]
 
-    return next_archive
+    # Si el archivo es muy grande, trunca con clustering
+    if len(archive) > archive_size:
+        archive = truncate_clustering(archive, archive_size)
+
+    # Si el archivo es pequeño, completa con mejores individuos restantes
+    elif len(archive) < archive_size:
+        sorted_ind = sorted(combined, key=lambda x: x.raw_fitness)
+        for ind in sorted_ind:
+            if ind not in archive:
+                archive.append(ind)
+                if len(archive) == archive_size:
+                    break
+
+    return archive
+
+def truncate_clustering(archive, archive_size):
+    """
+    Usa KMeans para agrupar y seleccionar el individuo más cercano a cada centroide.
+    """
+    X = np.array([ind.objectives for ind in archive])
+    kmeans = KMeans(n_clusters=archive_size, random_state=42)
+    labels = kmeans.fit_predict(X)
+    centroids = kmeans.cluster_centers_
+    new_archive = []
+
+    for cluster_idx in range(archive_size):
+        cluster_inds = [ind for ind, label in zip(archive, labels) if label == cluster_idx]
+        if not cluster_inds:
+            continue
+        cluster_objs = np.array([ind.objectives for ind in cluster_inds])
+        centroid = centroids[cluster_idx]
+        distances = np.linalg.norm(cluster_objs - centroid, axis=1)
+        best = cluster_inds[np.argmin(distances)]
+        new_archive.append(best)
+
+    return new_archive
+
 
 def selection(population, num_parents):
     # Selección por torneo binario con base en el fitness bruto (menor es mejor)
@@ -133,8 +163,9 @@ def spea1_algorithm(tsp_instance, population_size, archive_size, generations, cr
         archive = calculate_strength(archive)
         population, archive = calculate_raw_fitness(population, archive)
 
-        # Selección ambiental para actualizar el archivo
-        archive = environmental_selection_spea1(population, archive, archive_size)
+        combined = population + archive
+        archive = environmental_selection_spea1(combined, archive_size)
+
 
         if generation == generations - 1:
             break
@@ -160,7 +191,8 @@ def spea1_algorithm(tsp_instance, population_size, archive_size, generations, cr
         population = next_population
 
     # Devuelve los objetivos de los individuos no dominados del archivo final
-    pareto_individuals = [ind for ind in archive if ind.strength == 0]
+    pareto_individuals = [ind for ind in archive if ind.raw_fitness == 0]
+
     pareto_objectives = [ind.objectives for ind in pareto_individuals]
 
     return pareto_objectives

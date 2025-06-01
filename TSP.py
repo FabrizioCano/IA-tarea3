@@ -110,7 +110,7 @@ def solve_with_spea(tsp_instance):
     num_runs = 5 # You can change this number of runs
 
     # Parameters for SPEA1 (can be adjusted)
-    pop_size = 100
+    pop_size = 200
     generations = 200
     crossover_rate = 0.8
     mutation_rate = 0.1

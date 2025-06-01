@@ -139,19 +139,16 @@ def calculate_spread(front, reference_front_min_obj, reference_front_max_obj):
     return spread_value
 
 def calculate_extent(front):
-    """
-    Calcula la extensión (rango) cubierto por el frente en cada objetivo.
-    Retorna una lista donde cada elemento es el rango para un objetivo.
-    """
     if len(front) == 0:
-        return [0.0] * 2 
+        return 0.0
 
     front_np = np.array(front)
-    min_obj_values = np.min(front_np, axis=0)
-    max_obj_values = np.max(front_np, axis=0)
+    min_point = np.min(front_np, axis=0)
+    max_point = np.max(front_np, axis=0)
 
-    extent_per_objective = max_obj_values - min_obj_values
-    return extent_per_objective.tolist()
+    # Distancia euclidiana entre extremos
+    extent = np.linalg.norm(max_point - min_point)
+    return extent
 
 def dominates(obj1, obj2):
     """Verifica si obj1 domina a obj2 (para minimización)."""
@@ -178,38 +175,38 @@ def dominates(obj1, obj2):
        
     return dominated_count """
 
-def check_for_dominated_solutions(obtained_front, reference_front):
+def check_for_dominated_solutions(obtained_front, reference_front, tolerance=1e-3):
     """
-    Calcula el porcentaje de soluciones del frente obtenido que NO están en el frente de referencia.
-    El resultado es el 'error' como proporción (0.0 ideal, 1.0 es que ninguna coincide).
+    Calcula el porcentaje de soluciones del frente obtenido que no están cerca (por tolerancia)
+    de las del frente de referencia.
     """
     if not obtained_front:
-        return 1.0  # todo es error si no hay nada obtenido
+        return 1.0
 
-    # Convertimos a tuplas para poder usar conjuntos y comparación exacta
-    obtained_set = set(tuple(p) for p in obtained_front)
-    reference_set = set(tuple(p) for p in reference_front)
+    matched = 0
+    for p in obtained_front:
+        for q in reference_front:
+            if np.linalg.norm(np.array(p) - np.array(q)) <= tolerance:
+                matched += 1
+                break 
 
-    matching = obtained_set & reference_set  # intersección: puntos correctos
-    correct = len(matching)
-    total = len(obtained_set)
-
-    error = 1.0 - (correct / total)
+    error = 1.0 - (matched / len(obtained_front))
     return error
+
 
 # --- Funciones para ejecutar algoritmos y recopilar frentes ---
 
-def solve_with_nsga(tsp_instance, num_runs=5):
+def solve_with_nsga(tsp_instance,name_instance, num_runs=5):
     all_nsga_fronts_per_run = [] # Para almacenar el frente de cada corrida
     all_nsga_solutions_combined = [] # Para el frente de referencia global
 
-    with open("frentes_pareto_nsga.csv", mode='w', newline='') as file:
+    with open(f'frentes_pareto_nsga.{name_instance}.csv', mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["Corrida", "Objetivo1", "Objetivo2"]) 
 
         for problem_run in range(1, num_runs + 1): 
             print(f'\n--- Corriendo NSGA-I, Episodio: {problem_run} ---')
-            Ytrue = nsga1(tsp_instance, 100, 200, 0.2, 0.3) # Asegúrate de que los parámetros sean consistentes
+            Ytrue = nsga1(tsp_instance, 100, 200, 0.2, 0.3) 
             
             # Convertir a flotantes y asegurar que los puntos sean tuplas para consistencia
             Ytrue_float = [tuple(map(float, obj)) for obj in Ytrue]
@@ -222,22 +219,35 @@ def solve_with_nsga(tsp_instance, num_runs=5):
 
             print(f'Frente de Pareto de la corrida {problem_run} (NSGA-I): {Ytrue_float}')
 
+    
+        # --- Cálculo del frente promedio punto a punto ---
+        min_len = min(len(frente) for frente in all_nsga_fronts_per_run)
+
+        Ytrue_avg = []
+        for i in range(min_len):
+            avg_sol = np.mean([frente[i] for frente in all_nsga_fronts_per_run], axis=0)
+            Ytrue_avg.append(tuple(avg_sol))
+
+       
+        for obj1, obj2 in Ytrue_avg:
+            writer.writerow(["promedio", obj1, obj2])
+            
     # Retorna tanto los frentes individuales por corrida como la combinación de todos
     return all_nsga_fronts_per_run, all_nsga_solutions_combined
 
 
-def solve_with_spea(tsp_instance, num_runs=5): # Agregado num_runs como parámetro
-    all_spea_fronts_per_run = [] # Para almacenar el frente de cada corrida
-    all_spea_solutions_combined = [] # Para el frente de referencia global
+def solve_with_spea(tsp_instance, name_instance,num_runs=5): 
+    all_spea_fronts_per_run = [] # frente de cada corrida
+    all_spea_solutions_combined = [] # frente de referencia global
 
     # Parameters for SPEA1
     pop_size = 100
     generations = 200
     crossover_rate = 0.8
     mutation_rate = 0.1
-    archive_size = int(pop_size * 0.5)
+    archive_size = 100
 
-    with open("frentes_pareto_spea.csv", mode='w', newline='') as file:
+    with open(f'frentes_pareto_spea.{name_instance}.csv', mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(["Corrida", "Objetivo1", "Objetivo2"])
 
@@ -255,6 +265,23 @@ def solve_with_spea(tsp_instance, num_runs=5): # Agregado num_runs como parámet
                 writer.writerow([f"corrida_{problem_run}", obj1, obj2])
 
             print(f'Frente de Pareto de la corrida {problem_run} (SPEA1): {Ytrue_spea_float}')
+            
+        # --- Cálculo del frente promedio punto a punto ---
+        frentes_ordenados = []
+        for frente in all_spea_fronts_per_run:
+            frente_ordenado = sorted(frente, key=lambda x: x[0])
+            frentes_ordenados.append(frente_ordenado)
+
+        min_len = min(len(frente) for frente in frentes_ordenados)
+
+        Ytrue_avg = []
+        if min_len > 0:
+            for i in range(min_len):
+                avg_sol = np.mean([frente[i] for frente in frentes_ordenados], axis=0)
+                Ytrue_avg.append(tuple(avg_sol))
+
+            for obj1, obj2 in Ytrue_avg:
+                writer.writerow(["promedio_spea", obj1, obj2])
 
     # Retorna tanto los frentes individuales por corrida como la combinación de todos
     return all_spea_fronts_per_run, all_spea_solutions_combined
@@ -286,7 +313,6 @@ def get_reference_pareto_front(all_solutions):
     return sorted(pareto_front, key=lambda x: x[0])
 
 
-instancia=0
 def find_best_front(fronts, reference_front, reference_front_min_obj, reference_front_max_obj):
     best_index = -1
     best_metrics = None  # Será una tupla: (M1, M2, -M3) para comparar fácilmente (todos minimización)
@@ -294,10 +320,9 @@ def find_best_front(fronts, reference_front, reference_front_min_obj, reference_
     for idx, run_front in enumerate(fronts):
         m1 = generational_distance(run_front, reference_front)
         m2 = calculate_distribution_sigma(run_front)
-        m3 = calculate_spread(run_front, reference_front_min_obj, reference_front_max_obj)
-
-        # Guardar como tupla para comparación. Negamos M3 para que sea minimización también.
-        metrics_tuple = (m1, m2, -m3)
+        m3 = calculate_extent(run_front)
+        error= check_for_dominated_solutions(run_front, reference_front)
+        metrics_tuple = (m1, m2, -m3,error)
 
         if best_metrics is None or metrics_tuple < best_metrics:
             best_metrics = metrics_tuple
@@ -306,24 +331,28 @@ def find_best_front(fronts, reference_front, reference_front_min_obj, reference_
     return best_index, fronts[best_index], best_metrics
 instancia = 1
 if __name__ == '__main__':
+    
     if instancia == 0:
         tsp1 = TSP("tsp_KROAB100.TSP.TXT")
         tsp1.print_summary()
+        name_instance = "KROAB100"
+        
     else:
         tsp1 = TSP("tsp_kroac100.tsp.txt")
         tsp1.print_summary()
+        name_instance = "kroac100"
     # --- Parámetros de la corrida ---
     num_runs_for_metrics = 5 # Define el número de corridas para calcular el promedio y las métricas
 
     # --- Ejecutar algoritmos y recopilar todos los frentes ---
     # `nsga_fronts_per_run` contiene una lista de frentes, uno por cada corrida
     # `all_nsga_solutions_combined` contiene todos los puntos de todas las corridas de NSGA
-    nsga_fronts_per_run, all_nsga_solutions_combined = solve_with_nsga(tsp1, num_runs=num_runs_for_metrics)
+    nsga_fronts_per_run, all_nsga_solutions_combined = solve_with_nsga(tsp1,name_instance, num_runs=num_runs_for_metrics)
     
     
-    spea_fronts_per_run, all_spea_solutions_combined = solve_with_spea(tsp1, num_runs=num_runs_for_metrics)
+    spea_fronts_per_run, all_spea_solutions_combined = solve_with_spea(tsp1,name_instance, num_runs=num_runs_for_metrics)
 
-    # --- Combinar TODOS los puntos de TODOS los algoritmos y obtener el frente de Pareto de referencia global ---
+    # --- Combinar todos los puntos de todos los algoritmos y obtener el frente de Pareto de referencia global ---
     all_combined_solutions_for_reference = all_nsga_solutions_combined + all_spea_solutions_combined
     reference_front = get_reference_pareto_front(all_combined_solutions_for_reference)
     
@@ -378,7 +407,7 @@ if __name__ == '__main__':
     print(f"M3 (Extension - Spread) NSGA-I (Promedio): {np.mean(spread_nsga_list):.4f} (Desv.Est: {np.std(spread_nsga_list):.4f})")
     # Para Extent, podríamos promediar cada componente o solo mostrar el promedio de las listas
     print(f"M3 (Extension del frente - Rango) NSGA-I (Promedio por objetivo): {np.mean(extent_nsga_list, axis=0)}")
-    print(f"Error (Elementos dominados en frente NSGA-I) (Promedio): {np.mean(dominated_nsga_list):.2f}")
+    print(f"Error (Elementos dominados en frente NSGA-I) (Promedio): {np.mean(dominated_nsga_list):.2f}, Desviación: {np.std(dominated_nsga_list):.2f}")
 
 
     # --- Calcular y promediar métricas para SPEA1 a través de las corridas ---
@@ -419,6 +448,28 @@ if __name__ == '__main__':
     print(f"M2 (Distribucion - Spacing) SPEA1 (Promedio): {np.mean(spacing_spea_list):.4f} (Desv.Est: {np.std(spacing_spea_list):.4f})")
     print(f"M3 (Extension - Spread) SPEA1 (Promedio): {np.mean(spread_spea_list):.4f} (Desv.Est: {np.std(spread_spea_list):.4f})")
     print(f"M3 (Extension del frente - Rango) SPEA1 (Promedio por objetivo): {np.mean(extent_spea_list, axis=0)}")
-    print(f"Error (Elementos dominados en frente SPEA1) (Promedio): {np.mean(dominated_spea_list):.2f}")
+    print(f"Error (Elementos dominados en frente SPEA1) (Promedio): {np.mean(dominated_spea_list):.2f}, Desviación: {np.std(dominated_spea_list):.2f}")
     
-
+    """ comparar los mejores frentes de ambos algoritmos """
+    print("\n--- Comparación de los mejores frentes de NSGA-I y SPEA1 ---")
+    best_idx_nsga, best_front_nsga, best_metrics_nsga = find_best_front(
+        nsga_fronts_per_run,
+        reference_front,
+        reference_front_min_obj,
+        reference_front_max_obj
+    )
+    best_idx_spea, best_front_spea, best_metrics_spea = find_best_front(
+        spea_fronts_per_run,
+        reference_front,
+        reference_front_min_obj,
+        reference_front_max_obj
+    )
+    print(f"Índice del mejor frente NSGA-I: {best_idx_nsga}")
+    print(f"M1 (GD) NSGA-I: {best_metrics_nsga[0]:.4f}, M2 (Distribución σ): {best_metrics_nsga[1]:.4f}, M3 (Spread): {-best_metrics_nsga[2]:.4f}, Error: {best_metrics_nsga[3]:.2f}")
+    print(f"Índice del mejor frente SPEA1: {best_idx_spea}")
+    print(f"M1 (GD) SPEA1: {best_metrics_spea[0]:.4f}, M2 (Distribución σ): {best_metrics_spea[1]:.4f}, M3 (Spread): {-best_metrics_spea[2]:.4f}, Error: {best_metrics_spea[3]:.2f}")
+    print("\n--- Frentes obtenidos ---")
+    print(f"Mejor frente NSGA-I: {best_front_nsga}")
+    print(f"Mejor frente SPEA1: {best_front_spea}")
+    
+    
